@@ -536,10 +536,7 @@ function searchSection(s, isAuth) {
       ${tip('How sessions are divided by search use and content engagement. Each session falls into exactly one of the three top-level categories.')}
     </div>
     <p class="section-base">${baseLabel}</p>
-    ${methodology('method-s2', currentView === 'combined'
-      ? 'Content Views from Search: page views on SRM and SK content pages (matched by path regex per property) where the HTTP referrer contained /search/results/. Total Searches: view_search_results event count from the All Rolled Up property filtered to sk.sagepub.com and methods.sagepub.com, plus parasol_universal_search event count. Search-to-Content Rate = Content Views from Search ÷ Total Searches.'
-      : 'Pulls from GA4 event data — whether a view_search_results event fired at any point during the session. Total Search Events counts individual search actions so one session can contribute multiple. Content Views from Search counts page views where the HTTP referrer was a search results page (/search/results/), scoped to recognised content page paths.'
-    )}
+    ${methodology('method-s2', 'Pulls from GA4 event data — whether a view_search_results event fired at any point during the session. Total Search Events counts individual search actions so one session can contribute multiple. Content Views from Search is an estimate based on page referrer: it counts page views where the HTTP referrer header contained /search/results, indicating the user navigated directly from a search results page to that page.')}
     <div class="cards">
       <div class="card srch">
         <div class="label">Used Search ${tip(`${srchP}% of sessions (${num(s.searched)}) included at least one search - the user typed a query and viewed results at some point during their visit. Triggered by the view_search_results event.`)}</div>
@@ -564,30 +561,6 @@ function searchSection(s, isAuth) {
       ${subBar('not-reached', 'Did not reach a content page', rncP, snc,
         `${rncP}% of searchers (${num(snc)} sessions) searched but did not visit a recognised content page. They may have exited from search results or navigated to non-content areas.`)}
     </div>
-    ${currentView === 'combined' ? `
-    <div class="cards">
-      <div class="card ext">
-        <div class="label">Content Views from Search ${tip('Page views on SRM or SK content pages (matched by per-property path regex) where the HTTP referrer was a search results page (/search/results/). Direct causal measure: the user navigated from a search results page to a content page.')}</div>
-        <div class="value">${num(s.content_views_from_search || 0)}</div>
-        <div class="sub">page views</div>
-      </div>
-      <div class="card total">
-        <div class="label">Total Searches ${tip('view_search_results event count on SRM + SK (via All Rolled Up, filtered by hostname) plus parasol_universal_search event count. One session can contribute multiple events.', 'right')}</div>
-        <div class="value">${num(s.total_searches || 0)}</div>
-        <div class="sub">individual searches</div>
-      </div>
-    </div>
-    <div class="cards" style="margin-top:8px">
-      <div class="card srch">
-        <div class="label">Search-to-Content Rate ${tip('Content Views from Search ÷ Total Searches, expressed as a percentage. Measures how often a search led directly to a content page view.')}</div>
-        <div class="value">${(s.search_to_content_rate || 0).toFixed(1)}%</div>
-        <div class="sub">content views per search</div>
-      </div>
-    </div>
-    <p style="font-size:.8rem;color:var(--muted);margin-top:4px">
-      &#x2139;&nbsp;&nbsp;"Used Search" = sessions where <code>view_search_results</code> fired at least once. &nbsp;|&nbsp; Total Searches = <code>view_search_results</code> (SRM + SK via All Rolled Up) + <code>parasol_universal_search</code>.
-    </p>
-    ` : `
     <div class="cards">
       <div class="card total">
         <div class="label">Total Search Events ${tip('Count of individual view_search_results events fired. One session can contribute multiple search events if the user ran several searches during their visit.')}</div>
@@ -595,7 +568,7 @@ function searchSection(s, isAuth) {
         <div class="sub">individual searches</div>
       </div>
       <div class="card ext">
-        <div class="label">Content Views from Search ${tip('Page views on recognised content pages where the HTTP referrer was a search results page (/search/results/). Identifies content views driven directly by a search interaction.', 'right')}</div>
+        <div class="label">Content Views from Search ${tip('Page views where the referring page was a search results page (/Search/Results or /search/results). Identifies content views driven directly by a search interaction.', 'right')}</div>
         <div class="value">${num(s.content_views_from_search || 0)}</div>
         <div class="sub">page views</div>
       </div>
@@ -603,7 +576,6 @@ function searchSection(s, isAuth) {
     <p style="font-size:.8rem;color:var(--muted);margin-top:4px">
       &#x2139;&nbsp;&nbsp;"Used Search" = sessions where <code>view_search_results</code> fired at least once.
     </p>
-    `}
   </div>`;
 }
 

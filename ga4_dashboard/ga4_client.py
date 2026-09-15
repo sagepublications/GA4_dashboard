@@ -25,10 +25,6 @@ CONTENT_URL_PATTERNS = [
     '/project-planner', '/which-stats-test',
 ]
 
-# Per-property content page path regexes (used for the combined Search-to-Content calculation).
-SRM_CONTENT_REGEX = r'/(book|ency|hnbk|dict|dbte|podcast|how-to-guide|chart|expert-insights|dataset|tools-directory|case|foundations|video)/.+'
-SK_CONTENT_REGEX  = r'/(book|ency|hnbk|dict|dbte|foundations|data-decisions|cases|skills/business|skills/student-success|video)/.+'
-
 EXTERNAL_DISCOVERY_CHANNELS = {
     "Organic Search", "Organic Social", "Referral", "Organic Video",
     "Organic Shopping", "Display", "Paid Search", "Paid Social",
@@ -105,16 +101,6 @@ def _contains_or(field, patterns, case_sensitive=True):
     )
 
 
-def _regex_filter(field, pattern):
-    return FilterExpression(filter=Filter(
-        field_name=field,
-        string_filter=Filter.StringFilter(
-            value=pattern,
-            match_type=Filter.StringFilter.MatchType.PARTIAL_REGEXP,
-        ),
-    ))
-
-
 def fetch_channel_data(client, property_id, start_date, end_date, auth_only=False,
                        auth_filter=None, base_filter=None):
     if auth_only:
@@ -134,11 +120,10 @@ def fetch_channel_data(client, property_id, start_date, end_date, auth_only=Fals
 
 
 def fetch_search_data(client, property_id, start_date, end_date, auth_only=False,
-                      srch_filter=None, content_patterns=None, content_regex=None,
-                      auth_filter=None, base_filter=None):
+                      srch_filter=None, content_patterns=None, auth_filter=None, base_filter=None):
     if srch_filter is None:
         srch_filter = _search_filter()
-    if content_patterns is None and content_regex is None:
+    if content_patterns is None:
         content_patterns = CONTENT_URL_PATTERNS
 
     base = dict(
@@ -167,21 +152,15 @@ def fetch_search_data(client, property_id, start_date, end_date, auth_only=False
     def _n(resp, idx=0):
         return int(resp.rows[0].metric_values[idx].value) if resp.rows else 0
 
-    # Content filter: regex (PARTIAL_REGEXP) takes precedence over CONTAINS-OR patterns list.
-    if content_regex:
-        content_f = _regex_filter("pagePath", content_regex)
-    elif content_patterns:
-        content_f = _contains_or("pagePath", content_patterns, case_sensitive=False)
-    else:
-        content_f = None
-    # ref_f scoped to content pages when a filter is available — avoids counting every page after search.
+    # All independent queries run concurrently; sessions+eventCount combined to save a round-trip.
+    content_f = _contains_or("pagePath", content_patterns, case_sensitive=False) if content_patterns else None
+    # ref_f scoped to content pages when patterns are available — avoids counting every page after search.
     ref_content_f = _and(ref_f, content_f) if content_f else ref_f
-    has_content_filter = content_f is not None
     with concurrent.futures.ThreadPoolExecutor() as ex:
         f_total = ex.submit(_run, [Metric(name="sessions")], auth_f)
         f_srch  = ex.submit(_run, [Metric(name="sessions"), Metric(name="eventCount")], srch_f)
         f_ref   = ex.submit(_run, [Metric(name="screenPageViews")], ref_content_f)
-        if has_content_filter:
+        if content_patterns:
             f_cnt = ex.submit(_run, [Metric(name="sessions")], _and(auth_f, content_f))
             f_sc  = ex.submit(_run, [Metric(name="sessions")], _and(srch_f, content_f))
 
@@ -191,7 +170,7 @@ def fetch_search_data(client, property_id, start_date, end_date, auth_only=False
     search_events = _n(srch_r, 1)
     content_views_from_search = _n(f_ref.result())
 
-    if has_content_filter:
+    if content_patterns:
         sessions_with_content    = _n(f_cnt.result())
         searched_reached_content = _n(f_sc.result())
     else:
@@ -246,76 +225,28 @@ def _pct(n, d):
     return round(n / d * 100, 1) if d else 0
 
 
-def fetch_srm_sk_search_events(client, start_date, end_date):
-    """Count view_search_results events on SRM and SK via the All Rolled Up property."""
-    hostname_f = FilterExpression(
-        or_group=FilterExpressionList(expressions=[
-            FilterExpression(filter=Filter(
-                field_name="hostName",
-                string_filter=Filter.StringFilter(
-                    value="sk.sagepub.com",
-                    match_type=Filter.StringFilter.MatchType.BEGINS_WITH,
-                    case_sensitive=False,
-                ),
-            )),
-            FilterExpression(filter=Filter(
-                field_name="hostName",
-                string_filter=Filter.StringFilter(
-                    value="methods.sagepub.com",
-                    match_type=Filter.StringFilter.MatchType.BEGINS_WITH,
-                    case_sensitive=False,
-                ),
-            )),
-        ])
-    )
-    search_f = _and(
-        FilterExpression(filter=Filter(
-            field_name="eventName",
-            string_filter=Filter.StringFilter(
-                value="view_search_results",
-                match_type=Filter.StringFilter.MatchType.EXACT,
-            ),
-        )),
-        hostname_f,
-    )
-    resp = client.run_report(RunReportRequest(
-        property=f"properties/{PROPERTIES['us']}",
-        metrics=[Metric(name="eventCount")],
-        date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
-        dimension_filter=search_f,
-    ))
-    return int(resp.rows[0].metric_values[0].value) if resp.rows else 0
-
-
 def fetch_all(client, start_date, end_date, auth_only=False):
     us_srch = _us_search_filter()
 
-    # All seven fetches run concurrently; each fetch_search_data also parallelises
-    # its internal queries, so wall time ≈ one GA4 round-trip.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as ex:
-        f_srm_ch      = ex.submit(fetch_channel_data, client, PROPERTIES["srm"], start_date, end_date, auth_only)
-        f_sk_ch       = ex.submit(fetch_channel_data, client, PROPERTIES["sk"],  start_date, end_date, auth_only)
-        f_us_ch       = ex.submit(fetch_channel_data, client, PROPERTIES["us"],  start_date, end_date,
-                                  auth_only=False, base_filter=us_srch)
-        f_srm_s       = ex.submit(fetch_search_data, client, PROPERTIES["srm"], start_date, end_date, auth_only,
-                                  content_regex=SRM_CONTENT_REGEX)
-        f_sk_s        = ex.submit(fetch_search_data, client, PROPERTIES["sk"],  start_date, end_date, auth_only,
-                                  content_regex=SK_CONTENT_REGEX)
-        f_us_s        = ex.submit(fetch_search_data, client, PROPERTIES["us"],  start_date, end_date,
-                                  auth_only=False, srch_filter=us_srch, content_patterns=[], base_filter=us_srch)
-        f_srm_sk_evts = ex.submit(fetch_srm_sk_search_events, client, start_date, end_date)
+    # All six property×section fetches run concurrently; each fetch_search_data
+    # also parallelises its internal queries, so wall time ≈ one GA4 round-trip.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        f_srm_ch = ex.submit(fetch_channel_data, client, PROPERTIES["srm"], start_date, end_date, auth_only)
+        f_sk_ch  = ex.submit(fetch_channel_data, client, PROPERTIES["sk"],  start_date, end_date, auth_only)
+        f_us_ch  = ex.submit(fetch_channel_data, client, PROPERTIES["us"],  start_date, end_date,
+                             auth_only=False, base_filter=us_srch)
+        f_srm_s  = ex.submit(fetch_search_data, client, PROPERTIES["srm"], start_date, end_date, auth_only)
+        f_sk_s   = ex.submit(fetch_search_data, client, PROPERTIES["sk"],  start_date, end_date, auth_only)
+        f_us_s   = ex.submit(fetch_search_data, client, PROPERTIES["us"],  start_date, end_date,
+                             auth_only=False, srch_filter=us_srch, content_patterns=[], base_filter=us_srch)
 
     srm_ch, sk_ch, us_ch = f_srm_ch.result(), f_sk_ch.result(), f_us_ch.result()
     srm_s,  sk_s,  us_s  = f_srm_s.result(),  f_sk_s.result(),  f_us_s.result()
-    srm_sk_events         = f_srm_sk_evts.result()
 
     combined_ch = merge_channel_rows(srm_ch, sk_ch)
 
     def _sum(key):
         return srm_s[key] + sk_s[key]
-
-    combined_content_views = _sum("content_views_from_search")
-    total_searches         = srm_sk_events + (us_s["search_events"] or 0)
 
     return {
         "srm": {"channels": categorise_channels(srm_ch), "search": srm_s},
@@ -331,9 +262,7 @@ def fetch_all(client, start_date, end_date, auth_only=False):
                 "searched_reached_content":  _sum("searched_reached_content"),
                 "searched_no_content":       _sum("searched_no_content"),
                 "search_events":             _sum("search_events"),
-                "content_views_from_search": combined_content_views,
-                "total_searches":            total_searches,
-                "search_to_content_rate":    _pct(combined_content_views, total_searches),
+                "content_views_from_search": _sum("content_views_from_search"),
             },
         },
     }
