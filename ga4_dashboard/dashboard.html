@@ -554,13 +554,13 @@ function searchSection(s, isAuth) {
         <div class="sub">${num(neit)} sessions</div>
       </div>
     </div>
-    <div class="search-sub">
+    ${(src || snc) ? `<div class="search-sub">
       <div class="search-sub-header">&#x21b3; Of those who searched (${num(s.searched)} sessions):</div>
       ${subBar('reached',     'Reached a content page',       rcP,  src,
-        `${rcP}% of searchers (${num(src)} sessions) visited at least one content page during the same session. Note: GA4 does not expose page sequences, so the content view may have occurred before or after the search.`)}
+        `${rcP}% of searchers (${num(src)} sessions) visited at least one content page during the same session.`)}
       ${subBar('not-reached', 'Did not reach a content page', rncP, snc,
-        `${rncP}% of searchers (${num(snc)} sessions) searched but did not visit a recognised content page. They may have exited from search results or navigated to non-content areas.`)}
-    </div>
+        `${rncP}% of searchers (${num(snc)} sessions) searched but did not visit a recognised content page.`)}
+    </div>` : ''}
     <div class="cards">
       <div class="card total">
         <div class="label">Total Search Events ${tip('Count of individual view_search_results events fired. One session can contribute multiple search events if the user ran several searches during their visit.')}</div>

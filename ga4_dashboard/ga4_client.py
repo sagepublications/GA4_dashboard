@@ -152,17 +152,14 @@ def fetch_search_data(client, property_id, start_date, end_date, auth_only=False
     def _n(resp, idx=0):
         return int(resp.rows[0].metric_values[idx].value) if resp.rows else 0
 
-    # All independent queries run concurrently; sessions+eventCount combined to save a round-trip.
+    # Content filter for the referrer-based page-view query.
     content_f = _contains_or("pagePath", content_patterns, case_sensitive=False) if content_patterns else None
-    # ref_f scoped to content pages when patterns are available — avoids counting every page after search.
+    # ref_f scoped to content pages when patterns are available.
     ref_content_f = _and(ref_f, content_f) if content_f else ref_f
     with concurrent.futures.ThreadPoolExecutor() as ex:
         f_total = ex.submit(_run, [Metric(name="sessions")], auth_f)
         f_srch  = ex.submit(_run, [Metric(name="sessions"), Metric(name="eventCount")], srch_f)
         f_ref   = ex.submit(_run, [Metric(name="screenPageViews")], ref_content_f)
-        if content_patterns:
-            f_cnt = ex.submit(_run, [Metric(name="sessions")], _and(auth_f, content_f))
-            f_sc  = ex.submit(_run, [Metric(name="sessions")], _and(srch_f, content_f))
 
     total         = _n(f_total.result())
     srch_r        = f_srch.result()
@@ -170,12 +167,11 @@ def fetch_search_data(client, property_id, start_date, end_date, auth_only=False
     search_events = _n(srch_r, 1)
     content_views_from_search = _n(f_ref.result())
 
-    if content_patterns:
-        sessions_with_content    = _n(f_cnt.result())
-        searched_reached_content = _n(f_sc.result())
-    else:
-        sessions_with_content    = 0
-        searched_reached_content = 0
+    # Session-level co-occurrence queries (sessions with content AND search) are omitted:
+    # they timed out on larger date ranges and are methodologically misleading (session
+    # co-occurrence does not imply the user navigated from search to content).
+    sessions_with_content    = 0
+    searched_reached_content = 0
 
     content_no_search = max(0, sessions_with_content - searched_reached_content)
     neither           = max(0, total - searched - content_no_search)
