@@ -140,7 +140,7 @@ def fetch_search_data(client, property_id, start_date, end_date, auth_only=False
     ref_f  = _and(auth_f, FilterExpression(filter=Filter(
         field_name="pageReferrer",
         string_filter=Filter.StringFilter(
-            value="/search/results/",
+            value="/search/results",
             match_type=Filter.StringFilter.MatchType.CONTAINS,
             case_sensitive=False,
         ),
