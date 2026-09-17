@@ -543,8 +543,6 @@ function searchSection(s, isAuth) {
         <div class="value">${srchP}%</div>
         <div class="sub">${num(s.searched)} sessions</div>
       </div>
-    </div>
-    <div class="cards">
       <div class="card total">
         <div class="label">Total Search Events ${tip('Count of individual view_search_results events fired. One session can contribute multiple search events if the user ran several searches during their visit.')}</div>
         <div class="value">${num(s.search_events || 0)}</div>
