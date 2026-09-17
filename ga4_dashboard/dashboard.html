@@ -533,34 +533,17 @@ function searchSection(s, isAuth) {
   return `
   <div class="section" style="margin-top:32px">
     <div class="section-title">2 &middot; Session Behaviour${isAuth ? ' <span class="auth-badge">Authenticated only</span>' : ''}
-      ${tip('How sessions are divided by search use and content engagement. Each session falls into exactly one of the three top-level categories.')}
+      ${tip('Search usage and content engagement for this property and date range.')}
     </div>
     <p class="section-base">${baseLabel}</p>
-    ${methodology('method-s2', 'Pulls from GA4 event data — whether a view_search_results event fired at any point during the session. Total Search Events counts individual search actions so one session can contribute multiple. Content Views from Search is an estimate based on page referrer: it counts page views where the HTTP referrer header contained /search/results, indicating the user navigated directly from a search results page to that page.')}
+    ${methodology('method-s2', 'Used Search: sessions where view_search_results fired at least once. Total Search Events: count of individual view_search_results events (one session can contribute multiple). Content Views from Search: page views where the HTTP referrer was a search results page (/search/results), scoped to recognised content page paths.')}
     <div class="cards">
       <div class="card srch">
-        <div class="label">Used Search ${tip(`${srchP}% of sessions (${num(s.searched)}) included at least one search - the user typed a query and viewed results at some point during their visit. Triggered by the view_search_results event.`)}</div>
+        <div class="label">Used Search ${tip(`${srchP}% of sessions (${num(s.searched)}) included at least one view_search_results event — the user typed a query and viewed results at some point during their visit.`)}</div>
         <div class="value">${srchP}%</div>
         <div class="sub">${num(s.searched)} sessions</div>
       </div>
-      <div class="card nosrch">
-        <div class="label">Content, No Search ${tip(`${cnsP}% of sessions (${num(cns)}) viewed at least one content page but never used search. Includes any session where a content URL was visited and no search event fired.`)}</div>
-        <div class="value">${cnsP}%</div>
-        <div class="sub">${num(cns)} sessions</div>
-      </div>
-      <div class="card neither">
-        <div class="label">Neither ${tip(`${neitP}% of sessions (${num(neit)}) used neither search nor viewed a content page - for example sessions that only visited the homepage, portal pages, or exited immediately.`, 'right')}</div>
-        <div class="value">${neitP}%</div>
-        <div class="sub">${num(neit)} sessions</div>
-      </div>
     </div>
-    ${(src || snc) ? `<div class="search-sub">
-      <div class="search-sub-header">&#x21b3; Of those who searched (${num(s.searched)} sessions):</div>
-      ${subBar('reached',     'Reached a content page',       rcP,  src,
-        `${rcP}% of searchers (${num(src)} sessions) visited at least one content page during the same session.`)}
-      ${subBar('not-reached', 'Did not reach a content page', rncP, snc,
-        `${rncP}% of searchers (${num(snc)} sessions) searched but did not visit a recognised content page.`)}
-    </div>` : ''}
     <div class="cards">
       <div class="card total">
         <div class="label">Total Search Events ${tip('Count of individual view_search_results events fired. One session can contribute multiple search events if the user ran several searches during their visit.')}</div>
@@ -568,7 +551,7 @@ function searchSection(s, isAuth) {
         <div class="sub">individual searches</div>
       </div>
       <div class="card ext">
-        <div class="label">Content Views from Search ${tip('Page views where the referring page was a search results page (/Search/Results or /search/results). Identifies content views driven directly by a search interaction.', 'right')}</div>
+        <div class="label">Content Views from Search ${tip('Page views on recognised content pages where the HTTP referrer was a search results page (/search/results). Identifies content views driven directly by a search interaction.', 'right')}</div>
         <div class="value">${num(s.content_views_from_search || 0)}</div>
         <div class="sub">page views</div>
       </div>
